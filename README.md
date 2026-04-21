@@ -273,7 +273,3 @@ Path contains 3 collision(s) with room objects.
 - [Open3D](http://www.open3d.org/) — 3D visualisation backend
 
 ---
-
-## License
-
-This project is for academic and research use as part of a Semester 8 Computer Vision project.
