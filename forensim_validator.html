@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ForenSim — Crime Scene Path Validator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --panel: #0f1318;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #ff4060;
+    --accent3: #ffd060;
+    --text: #c8d4e0;
+    --text-dim: #5a6878;
+    --grid: #141a22;
+    --valid: #00e5a0;
+    --invalid: #ff4060;
+    --warn: #ffd060;
+    --obj-color: rgba(30,100,200,0.22);
+    --obj-border: #2a5fcc;
+    --path-color: #00e5a0;
+    --actor-color: #ff4060;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* === HEADER === */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; font-size: 22px; letter-spacing: 2px;
+    color: var(--accent);
+  }
+  .logo .sub { color: var(--text-dim); font-weight: 400; font-size: 12px; letter-spacing: 1px; }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-size: 16px; font-weight: 900;
+  }
+  .status-bar {
+    display: flex; gap: 16px; align-items: center;
+  }
+  .status-pill {
+    padding: 4px 12px; border-radius: 20px; font-size: 11px;
+    font-family: 'Share Tech Mono', monospace; letter-spacing: 1px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-dim);
+  }
+  .status-pill.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,160,0.07); }
+
+  /* === LAYOUT === */
+  .app {
+    display: grid;
+    grid-template-columns: 340px 1fr 320px;
+    grid-template-rows: 1fr 220px;
+    height: calc(100vh - 57px);
+    gap: 0;
+  }
+
+  /* === PANELS === */
+  .panel {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(255,255,255,0.02);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    color: var(--text-dim); text-transform: uppercase;
+  }
+  .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* === LEFT PANEL: STATEMENT INPUT === */
+  #panel-left { grid-column: 1; grid-row: 1; }
+
+  textarea#statement {
+    width: 100%; min-height: 160px; resize: vertical;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    color: var(--text); font-family: 'Barlow', sans-serif; font-size: 13px;
+    padding: 12px; border-radius: 4px; outline: none;
+    line-height: 1.6;
+    transition: border-color 0.2s;
+  }
+  textarea#statement:focus { border-color: var(--accent); }
+  textarea#statement::placeholder { color: var(--text-dim); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 18px; border-radius: 4px; cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+    border: none; transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent); color: #000;
+    width: 100%;
+    justify-content: center;
+  }
+  .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); }
+  .btn-secondary {
+    background: transparent; color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .section-label {
+    font-size: 11px; color: var(--text-dim); letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 8px; margin-top: 16px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* Actor Config */
+  .actor-row {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+  }
+  .actor-row input[type="text"],
+  .actor-row input[type="number"] {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    color: var(--text); padding: 7px 10px; border-radius: 4px;
+    font-size: 13px; outline: none; transition: border-color 0.2s;
+  }
+  .actor-row input:focus { border-color: var(--accent); }
+  .actor-row input[type="text"] { flex: 1; }
+  .actor-row input[type="number"] { width: 70px; }
+
+  select {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    color: var(--text); padding: 7px 10px; border-radius: 4px;
+    font-size: 13px; outline: none; width: 100%;
+    cursor: pointer;
+  }
+  option { background: #1a2030; }
+
+  /* Prefill buttons */
+  .prefill-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  .prefill-btn {
+    padding: 6px 10px; background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text-dim); font-size: 11px; cursor: pointer;
+    text-align: left; transition: all 0.15s;
+    font-family: 'Barlow', sans-serif;
+  }
+  .prefill-btn:hover { border-color: var(--accent); color: var(--text); background: rgba(0,229,160,0.06); }
+
+  /* === CENTER PANEL: MAP === */
+  #panel-center { grid-column: 2; grid-row: 1 / 3; border-right: 1px solid var(--border); border-bottom: none; }
+
+  .map-container {
+    width: 100%; height: 100%;
+    position: relative; overflow: hidden; background: var(--bg);
+  }
+
+  canvas#scene-canvas {
+    display: block;
+    width: 100%; height: 100%;
+    cursor: crosshair;
+  }
+
+  .map-controls {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; flex-direction: column; gap: 6px; z-index: 10;
+  }
+  .map-btn {
+    width: 32px; height: 32px;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: all 0.15s;
+  }
+  .map-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .map-legend {
+    position: absolute; bottom: 12px; left: 12px;
+    background: rgba(10,12,16,0.85); border: 1px solid var(--border);
+    border-radius: 4px; padding: 8px 12px;
+    font-size: 11px; color: var(--text-dim);
+    backdrop-filter: blur(4px);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  .map-hint {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(10,12,16,0.85); border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px 12px;
+    font-size: 11px; color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+
+  /* === RIGHT PANEL: RESULTS === */
+  #panel-right { grid-column: 3; grid-row: 1; border-right: none; }
+
+  .verdict-card {
+    border-radius: 6px; padding: 14px 16px;
+    border: 1px solid var(--border); margin-bottom: 12px;
+    position: relative; overflow: hidden;
+  }
+  .verdict-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  }
+  .verdict-card.valid { border-color: rgba(0,229,160,0.3); background: rgba(0,229,160,0.05); }
+  .verdict-card.valid::before { background: var(--valid); }
+  .verdict-card.invalid { border-color: rgba(255,64,96,0.3); background: rgba(255,64,96,0.05); }
+  .verdict-card.invalid::before { background: var(--invalid); }
+  .verdict-card.warn { border-color: rgba(255,208,96,0.3); background: rgba(255,208,96,0.05); }
+  .verdict-card.warn::before { background: var(--warn); }
+
+  .verdict-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .verdict-card.valid .verdict-label { color: var(--valid); }
+  .verdict-card.invalid .verdict-label { color: var(--invalid); }
+  .verdict-card.warn .verdict-label { color: var(--warn); }
+
+  .verdict-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+
+  /* Step list */
+  .step-list { list-style: none; }
+  .step-item {
+    padding: 8px 10px; margin-bottom: 4px;
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    border-radius: 4px; display: flex; align-items: flex-start; gap: 8px;
+    font-size: 12px; line-height: 1.5;
+  }
+  .step-icon { font-size: 14px; flex-shrink: 0; }
+  .step-valid { border-color: rgba(0,229,160,0.2); }
+  .step-invalid { border-color: rgba(255,64,96,0.4); background: rgba(255,64,96,0.06); }
+  .step-warn { border-color: rgba(255,208,96,0.3); }
+
+  /* Score */
+  .score-ring {
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; padding: 16px 0 8px;
+  }
+  .score-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 48px; line-height: 1;
+    font-weight: 900;
+  }
+  .score-label { font-size: 11px; color: var(--text-dim); letter-spacing: 2px; margin-top: 4px; }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 12px; color: var(--text-dim);
+  }
+  .empty-icon { font-size: 40px; opacity: 0.3; }
+  .empty-text { font-size: 12px; text-align: center; line-height: 1.6; max-width: 200px; }
+
+  /* === BOTTOM: TIMELINE === */
+  #panel-bottom {
+    grid-column: 1; grid-row: 2;
+    border-right: 1px solid var(--border); border-bottom: none;
+  }
+  #panel-bottom-events {
+    grid-column: 3; grid-row: 2;
+    border-right: none; border-bottom: none;
+  }
+
+  .timeline-track {
+    display: flex; gap: 6px; align-items: flex-start;
+    overflow-x: auto; padding-bottom: 8px;
+  }
+  .timeline-track::-webkit-scrollbar { height: 3px; }
+  .timeline-track::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .timeline-event {
+    flex-shrink: 0; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 4px;
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    color: var(--text-dim); min-width: 90px;
+    cursor: pointer; transition: all 0.15s;
+    background: rgba(255,255,255,0.02);
+  }
+  .timeline-event:hover { border-color: var(--accent); color: var(--accent); }
+  .timeline-event.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,160,0.08); }
+  .timeline-event.collision { border-color: var(--invalid); color: var(--invalid); background: rgba(255,64,96,0.08); }
+  .timeline-event-label { font-weight: 700; margin-bottom: 3px; }
+  .timeline-event-sub { opacity: 0.7; font-size: 9px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Mini meter */
+  .mini-meter { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; }
+  .mini-meter-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+  /* Coords display */
+  .coords-display {
+    position: absolute; bottom: 12px; right: 12px;
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    color: var(--text-dim); background: rgba(10,12,16,0.7);
+    padding: 4px 8px; border-radius: 3px;
+    pointer-events: none;
+  }
+
+  /* Annotation panel within scene */
+  .obj-tag {
+    position: absolute; pointer-events: none;
+    background: rgba(0,0,0,0.7); border: 1px solid var(--obj-border);
+    padding: 2px 6px; border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace; font-size: 9px;
+    color: #6a9fff; white-space: nowrap;
+  }
+
+  /* Loader overlay */
+  #loader {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; z-index: 999;
+    transition: opacity 0.5s;
+  }
+  #loader.hidden { opacity: 0; pointer-events: none; }
+  .loader-text { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--accent); letter-spacing: 2px; }
+  .loader-bar { width: 200px; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .loader-fill { height: 100%; background: var(--accent); animation: load 1.2s ease-in-out forwards; }
+  @keyframes load { from { width: 0; } to { width: 100%; } }
+
+  /* Highlight flicker on new result */
+  @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  .flicker { animation: flicker 0.4s ease; }
+
+  .tag { 
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-size: 10px; font-family: 'Share Tech Mono', monospace;
+    font-weight: 700; letter-spacing: 0.5px;
+  }
+  .tag-valid { background: rgba(0,229,160,0.15); color: var(--valid); }
+  .tag-invalid { background: rgba(255,64,96,0.15); color: var(--invalid); }
+  .tag-warn { background: rgba(255,208,96,0.15); color: var(--warn); }
+
+  /* Path waypoint label */
+  .waypoint-count {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text-dim);
+    background: rgba(10,12,16,0.7); padding: 3px 10px; border-radius: 10px;
+    pointer-events: none;
+  }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  .mono { font-family: 'Share Tech Mono', monospace; }
+
+  .help-text { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="logo-icon" style="width:48px;height:48px;font-size:24px;">⬡</div>
+  <div class="loader-text">FORENSIM LOADING...</div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    <div>
+      FORENSIM
+      <div class="sub">CRIME SCENE PATH VALIDATOR</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-pill active" id="scene-status">SCENE: scene_00001</div>
+    <div class="status-pill" id="obj-count-pill">—</div>
+    <div class="status-pill" id="path-status">PATH: EMPTY</div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- LEFT: Statement + Config -->
+  <div class="panel" id="panel-left">
+    <div class="panel-header">
+      <span class="panel-title">Witness Statement</span>
+      <button class="btn btn-secondary" style="font-size:10px;padding:4px 8px;" onclick="clearAll()">CLEAR ALL</button>
+    </div>
+    <div class="panel-body">
+
+      <div class="section-label">Narrative Statement</div>
+      <textarea id="statement" placeholder="Describe the actor's movements in plain English. E.g., 'The suspect entered from the south door, walked past the sofa, stopped near the kitchen sink, then moved toward the window on the north wall.'"></textarea>
+      <div class="help-text">Describe the movement. Then click waypoints on the map to trace the path.</div>
+
+      <hr class="divider">
+
+      <div class="section-label">Load Example Scenario</div>
+      <div class="prefill-grid">
+        <button class="prefill-btn" onclick="loadScenario('living')">🛋 Living Room<br>Entry → Sofa → TV</button>
+        <button class="prefill-btn" onclick="loadScenario('kitchen')">🍳 Kitchen<br>Entry → Sink → Fridge</button>
+        <button class="prefill-btn" onclick="loadScenario('suspicious')">⚠️ Suspicious<br>Wall bypass attempt</button>
+        <button class="prefill-btn" onclick="loadScenario('direct')">📍 Direct Path<br>Room crossing</button>
+      </div>
+
+      <hr class="divider">
+
+      <div class="section-label">Actor Configuration</div>
+      <div class="actor-row">
+        <input type="text" id="actor-name" value="Suspect A" placeholder="Actor name">
+        <input type="number" id="actor-height" value="1.75" step="0.05" min="0.5" max="2.5" title="Height (m)">
+      </div>
+      <p class="help-text">Height affects which obstacles block movement (objects below waist height are passable).</p>
+
+      <hr class="divider">
+
+      <div class="section-label">Display Options</div>
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin-bottom:8px;">
+        <input type="checkbox" id="show-labels" checked onchange="renderScene()">
+        <span style="font-size:12px;">Show object labels</span>
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
+        <input type="checkbox" id="show-grid" checked onchange="renderScene()">
+        <span style="font-size:12px;">Show grid</span>
+      </label>
+
+      <hr class="divider">
+
+      <button class="btn btn-primary" onclick="validatePath()">
+        <span>▶</span> VALIDATE PATH
+      </button>
+
+    </div>
+  </div>
+
+  <!-- CENTER: Scene Map -->
+  <div class="panel" id="panel-center" style="border-bottom:none;">
+    <div class="map-container">
+      <canvas id="scene-canvas"></canvas>
+
+      <div class="map-hint" id="map-hint">CLICK TO ADD WAYPOINTS · RIGHT-CLICK TO REMOVE LAST</div>
+      <div class="waypoint-count" id="wp-count"></div>
+
+      <div class="map-controls">
+        <button class="map-btn" onclick="zoomIn()" title="Zoom In">+</button>
+        <button class="map-btn" onclick="zoomOut()" title="Zoom Out">−</button>
+        <button class="map-btn" onclick="resetView()" title="Reset View">⊙</button>
+        <button class="map-btn" onclick="clearPath()" title="Clear Path" style="color:var(--accent2);">✕</button>
+      </div>
+
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--obj-border)"></div>Object / Furniture</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--path-color)"></div>Actor Path</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--actor-color)"></div>Current Position</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Collision Detected</div>
+      </div>
+
+      <div class="coords-display" id="coords-display">x: — y: —</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div class="panel" id="panel-right">
+    <div class="panel-header">
+      <span class="panel-title">Validation Report</span>
+      <span id="result-tag"></span>
+    </div>
+    <div class="panel-body" id="results-body">
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-text">Draw a path on the map and click Validate to see the analysis.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM LEFT: Path Builder info -->
+  <div class="panel" id="panel-bottom">
+    <div class="panel-header">
+      <span class="panel-title">Path Waypoints</span>
+      <span class="mono" style="font-size:10px;color:var(--text-dim)" id="waypoint-label">0 points</span>
+    </div>
+    <div class="panel-body" style="padding:10px 16px;">
+      <div class="timeline-track" id="timeline-track">
+        <div style="color:var(--text-dim);font-size:11px;padding:8px 0;">Click on the map to add waypoints to trace the actor's path.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM RIGHT: Events Log -->
+  <div class="panel" id="panel-bottom-events">
+    <div class="panel-header">
+      <span class="panel-title">Object Interactions</span>
+    </div>
+    <div class="panel-body" style="padding:10px 16px;" id="interactions-log">
+      <div style="color:var(--text-dim);font-size:11px;padding:8px 0;">Validate a path to see object interactions.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// SCENE DATA (from bbox_3d.json, filtered and scaled to meters)
+// ============================================================
+const SCENE_OBJECTS = [{"id":9,"cx":-2.011,"cy":2.561,"cz":1.8,"sx":2.94,"sy":0.174,"sz":2.0},{"id":44,"cx":-1.792,"cy":1.427,"cz":2.763,"sx":0.682,"sy":0.47,"sz":0.075},{"id":45,"cx":1.721,"cy":0.411,"cz":2.225,"sx":0.45,"sy":0.104,"sz":1.15},{"id":47,"cx":-0.546,"cy":0.685,"cz":2.115,"sx":0.13,"sy":0.17,"sz":0.13},{"id":48,"cx":2.475,"cy":3.003,"cz":1.06,"sx":0.15,"sy":0.29,"sz":0.42},{"id":49,"cx":-0.016,"cy":1.793,"cz":2.43,"sx":1.47,"sy":0.09,"sz":0.6},{"id":59,"cx":1.247,"cy":2.024,"cz":0.426,"sx":0.296,"sy":0.231,"sz":0.111},{"id":60,"cx":-0.615,"cy":1.945,"cz":2.51,"sx":0.3,"sy":0.2,"sz":0.18},{"id":62,"cx":2.621,"cy":0.083,"cz":1.525,"sx":1.5,"sy":0.07,"sz":0.95},{"id":63,"cx":-2.396,"cy":-1.211,"cz":0.004,"sx":2.056,"sy":1.072,"sz":0.008},{"id":64,"cx":2.349,"cy":0.948,"cz":1.325,"sx":0.59,"sy":0.08,"sz":2.65},{"id":65,"cx":-1.641,"cy":-2.341,"cz":1.998,"sx":0.486,"sy":0.205,"sz":0.501},{"id":67,"cx":-0.2,"cy":2.439,"cz":0.765,"sx":0.31,"sy":0.1,"sz":0.33},{"id":68,"cx":-0.033,"cy":-1.129,"cz":1.32,"sx":0.595,"sy":0.563,"sz":0.595},{"id":71,"cx":2.406,"cy":0.086,"cz":0.52,"sx":1.5,"sy":0.5,"sz":1.04},{"id":83,"cx":-3.269,"cy":-0.475,"cz":1.572,"sx":0.55,"sy":0.457,"sz":0.845},{"id":90,"cx":-0.071,"cy":-2.454,"cz":0.834,"sx":0.733,"sy":0.413,"sz":0.135},{"id":91,"cx":0.035,"cy":-3.253,"cz":0.986,"sx":0.395,"sy":0.259,"sz":0.292},{"id":92,"cx":-0.018,"cy":-1.73,"cz":0.402,"sx":0.598,"sy":0.571,"sz":0.605},{"id":93,"cx":-0.677,"cy":-2.286,"cz":1.66,"sx":0.26,"sy":0.43,"sz":1.32},{"id":94,"cx":-1.1,"cy":-2.286,"cz":0.255,"sx":1.28,"sy":0.75,"sz":0.51},{"id":96,"cx":2.266,"cy":1.852,"cz":0.472,"sx":1.77,"sy":0.76,"sz":0.945},{"id":99,"cx":1.688,"cy":0.399,"cz":0.35,"sx":0.6,"sy":0.6,"sz":0.7},{"id":101,"cx":-3.326,"cy":0.481,"cz":2.15,"sx":0.173,"sy":0.196,"sz":0.2},{"id":106,"cx":2.289,"cy":-1.006,"cz":0.96,"sx":0.605,"sy":0.726,"sz":1.921},{"id":107,"cx":-0.716,"cy":-1.368,"cz":0.95,"sx":0.85,"sy":0.5,"sz":1.899},{"id":113,"cx":-0.263,"cy":1.571,"cz":2.125,"sx":0.27,"sy":0.177,"sz":0.21},{"id":114,"cx":2.232,"cy":3.426,"cz":1.81,"sx":0.732,"sy":0.14,"sz":1.9},{"id":115,"cx":-0.274,"cy":3.131,"cz":1.8,"sx":0.57,"sy":0.14,"sz":1.9},{"id":116,"cx":0.02,"cy":3.426,"cz":1.769,"sx":0.732,"sy":0.14,"sz":1.9},{"id":117,"cx":-2.178,"cy":-2.478,"cz":0.247,"sx":0.5,"sy":0.573,"sz":0.298},{"id":122,"cx":-0.172,"cy":0.568,"cz":1.314,"sx":0.33,"sy":0.209,"sz":0.388},{"id":124,"cx":-0.579,"cy":1.932,"cz":0.889,"sx":0.307,"sy":0.164,"sz":0.178},{"id":130,"cx":1.844,"cy":0.371,"cz":0.715,"sx":0.33,"sy":0.189,"sz":0.031},{"id":131,"cx":1.35,"cy":-3.647,"cz":1.0,"sx":0.8,"sy":0.43,"sz":2.0},{"id":133,"cx":0.045,"cy":-1.642,"cz":0.955,"sx":0.3,"sy":0.3,"sz":0.23},{"id":134,"cx":1.056,"cy":1.724,"cz":0.681,"sx":0.541,"sy":0.518,"sz":0.621},{"id":138,"cx":1.685,"cy":-1.712,"cz":0.891,"sx":0.582,"sy":0.429,"sz":0.519},{"id":142,"cx":-2.697,"cy":0.667,"cz":0.4,"sx":0.53,"sy":0.53,"sz":0.8},{"id":146,"cx":1.014,"cy":2.984,"cz":0.427,"sx":2.15,"sy":0.473,"sz":0.053},{"id":147,"cx":2.376,"cy":0.087,"cz":0.387,"sx":1.507,"sy":0.473,"sz":0.053},{"id":148,"cx":-0.046,"cy":-3.178,"cz":0.397,"sx":0.6,"sy":0.6,"sz":0.794},{"id":150,"cx":1.309,"cy":0.88,"cz":2.427,"sx":2.671,"sy":0.01,"sz":0.422},{"id":152,"cx":1.598,"cy":0.89,"cz":1.1,"sx":1.4,"sy":0.02,"sz":2.2},{"id":153,"cx":1.945,"cy":0.87,"cz":1.125,"sx":1.4,"sy":0.02,"sz":2.2},{"id":162,"cx":1.151,"cy":1.87,"cz":0.185,"sx":0.8,"sy":0.8,"sz":0.37},{"id":167,"cx":-2.293,"cy":-0.118,"cz":1.0,"sx":0.75,"sy":0.16,"sz":2.0},{"id":184,"cx":-1.801,"cy":-0.502,"cz":1.0,"sx":0.654,"sy":0.28,"sz":2.0},{"id":185,"cx":-1.369,"cy":-0.886,"cz":1.0,"sx":0.65,"sy":0.19,"sz":2.0},{"id":186,"cx":-1.261,"cy":0.245,"cz":1.0,"sx":0.8,"sy":0.28,"sz":2.0},{"id":187,"cx":-2.0,"cy":2.783,"cz":1.6,"sx":1.48,"sy":0.164,"sz":1.4},{"id":194,"cx":2.8,"cy":-3.647,"cz":1.6,"sx":0.6,"sy":0.06,"sz":1.4},{"id":196,"cx":-0.1,"cy":-3.647,"cz":1.6,"sx":0.5,"sy":0.06,"sz":1.4},{"id":198,"cx":-0.232,"cy":0.606,"cz":0.824,"sx":0.487,"sy":0.29,"sz":0.302},{"id":201,"cx":-0.232,"cy":1.789,"cz":0.666,"sx":0.8,"sy":0.256,"sz":0.131},{"id":202,"cx":-0.329,"cy":1.782,"cz":1.278,"sx":1.25,"sy":0.03,"sz":0.79},{"id":206,"cx":-1.782,"cy":2.328,"cz":0.061,"sx":2.262,"sy":0.622,"sz":0.121},{"id":210,"cx":2.033,"cy":-3.141,"cz":1.0,"sx":0.621,"sy":0.18,"sz":2.0},{"id":220,"cx":-0.214,"cy":-1.757,"cz":0.94,"sx":0.54,"sy":0.12,"sz":0.2},{"id":221,"cx":-0.191,"cy":-3.257,"cz":1.035,"sx":0.37,"sy":0.37,"sz":0.41},{"id":240,"cx":1.15,"cy":3.634,"cz":1.6,"sx":2.7,"sy":0.1,"sz":1.4},{"id":242,"cx":0.002,"cy":-1.129,"cz":0.736,"sx":0.598,"sy":0.534,"sz":0.572},{"id":257,"cx":-0.483,"cy":1.751,"cz":1.45,"sx":0.76,"sy":0.03,"sz":0.5}];
+
+// Semantic labels for objects (heuristic by size/position)
+const OBJ_LABELS = {};
+function computeLabels() {
+  SCENE_OBJECTS.forEach(o => {
+    const vol = o.sx * o.sy * o.sz;
+    const maxDim = Math.max(o.sx, o.sy);
+    let label = 'object';
+    if (o.sz > 1.5) label = 'wall/column';
+    else if (o.sx > 1.8 && o.sy > 0.5) label = 'sofa/bed';
+    else if (o.sx > 1.2 && o.sy > 0.3) label = 'table/counter';
+    else if (maxDim > 0.8 && o.sz < 0.6) label = 'table';
+    else if (o.sx < 0.4 && o.sz > 0.5) label = 'lamp/decor';
+    else if (o.sx > 0.5 && o.sy > 0.5 && o.sz < 0.5) label = 'chair/stool';
+    else if (vol < 0.05) label = 'small object';
+    OBJ_LABELS[o.id] = label;
+  });
+  // Manual overrides based on position/size knowledge
+  OBJ_LABELS[96]  = 'sofa';
+  OBJ_LABELS[71]  = 'table';
+  OBJ_LABELS[162] = 'table';
+  OBJ_LABELS[134] = 'armchair';
+  OBJ_LABELS[99]  = 'coffee table';
+  OBJ_LABELS[94]  = 'counter';
+  OBJ_LABELS[92]  = 'cabinet';
+  OBJ_LABELS[107] = 'cabinet/wardrobe';
+  OBJ_LABELS[68]  = 'sofa';
+  OBJ_LABELS[90]  = 'bench';
+  OBJ_LABELS[148] = 'chair';
+  OBJ_LABELS[167] = 'wall panel';
+  OBJ_LABELS[184] = 'wall panel';
+  OBJ_LABELS[185] = 'wall panel';
+  OBJ_LABELS[186] = 'wall panel';
+  OBJ_LABELS[114] = 'wall/window';
+  OBJ_LABELS[115] = 'wall/window';
+  OBJ_LABELS[116] = 'wall/window';
+  OBJ_LABELS[240] = 'wall/railing';
+  OBJ_LABELS[187] = 'wall/railing';
+  OBJ_LABELS[152] = 'wall panel';
+  OBJ_LABELS[153] = 'wall panel';
+}
+computeLabels();
+
+// ============================================================
+// CANVAS + VIEWPORT
+// ============================================================
+const canvas = document.getElementById('scene-canvas');
+const ctx = canvas.getContext('2d');
+
+let viewOffset = { x: 0, y: 0 };
+let viewScale = 60; // px per meter
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let dragOffset = { x: 0, y: 0 };
+let path = [];
+let validationResult = null;
+let hoveredObj = null;
+let animFrame = 0;
+
+function worldToCanvas(wx, wy) {
+  return {
+    x: canvas.width / 2 + (wx + viewOffset.x) * viewScale,
+    y: canvas.height / 2 + (wy + viewOffset.y) * viewScale
+  };
+}
+
+function canvasToWorld(cx, cy) {
+  return {
+    x: (cx - canvas.width / 2) / viewScale - viewOffset.x,
+    y: (cy - canvas.height / 2) / viewScale - viewOffset.y
+  };
+}
+
+function resizeCanvas() {
+  const container = canvas.parentElement;
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+  renderScene();
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// ============================================================
+// RENDER SCENE
+// ============================================================
+function renderScene() {
+  if (!canvas.width) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const W = canvas.width, H = canvas.height;
+  const showGrid = document.getElementById('show-grid').checked;
+  const showLabels = document.getElementById('show-labels').checked;
+  const actorHeight = parseFloat(document.getElementById('actor-height').value) || 1.75;
+
+  // Background
+  ctx.fillStyle = '#0a0c10';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  if (showGrid) {
+    ctx.strokeStyle = '#141a22';
+    ctx.lineWidth = 1;
+    const gridSpacing = viewScale; // 1m
+    const startX = ((W/2 + viewOffset.x * viewScale) % gridSpacing + gridSpacing) % gridSpacing;
+    const startY = ((H/2 + viewOffset.y * viewScale) % gridSpacing + gridSpacing) % gridSpacing;
+    ctx.beginPath();
+    for (let x = startX; x < W; x += gridSpacing) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (let y = startY; y < H; y += gridSpacing) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+
+    // Major grid every 5m
+    ctx.strokeStyle = '#1a2030';
+    ctx.lineWidth = 1;
+    const mg = gridSpacing * 5;
+    const msx = ((W/2 + viewOffset.x * viewScale) % mg + mg) % mg;
+    const msy = ((H/2 + viewOffset.y * viewScale) % mg + mg) % mg;
+    ctx.beginPath();
+    for (let x = msx; x < W; x += mg) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (let y = msy; y < H; y += mg) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+  }
+
+  // Origin cross
+  const origin = worldToCanvas(0, 0);
+  ctx.strokeStyle = '#1e2530';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(origin.x - 10, origin.y); ctx.lineTo(origin.x + 10, origin.y);
+  ctx.moveTo(origin.x, origin.y - 10); ctx.lineTo(origin.x, origin.y + 10);
+  ctx.stroke();
+
+  // Collision segments from validation
+  const collisionSegments = validationResult ? validationResult.collisions.map(c => c.segIdx) : [];
+
+  // Draw objects
+  SCENE_OBJECTS.forEach(obj => {
+    const tl = worldToCanvas(obj.cx - obj.sx/2, obj.cy - obj.sy/2);
+    const br = worldToCanvas(obj.cx + obj.sx/2, obj.cy + obj.sy/2);
+    const w = br.x - tl.x;
+    const h = br.y - tl.y;
+
+    // Determine if this is a blocking object (at actor body height)
+    const isBlocking = isObjectBlocking(obj, actorHeight);
+    const isHovered = hoveredObj && hoveredObj.id === obj.id;
+
+    // Color by type
+    let fillColor, borderColor;
+    const label = OBJ_LABELS[obj.id] || 'object';
+    if (label.includes('wall')) {
+      fillColor = 'rgba(50,80,150,0.25)'; borderColor = '#3050a0';
+    } else if (label.includes('sofa') || label.includes('chair') || label.includes('armchair')) {
+      fillColor = 'rgba(40,100,80,0.2)'; borderColor = '#2a6050';
+    } else if (label.includes('table') || label.includes('counter') || label.includes('cabinet')) {
+      fillColor = 'rgba(100,70,30,0.2)'; borderColor = '#704820';
+    } else {
+      fillColor = 'rgba(30,60,120,0.18)'; borderColor = '#2a5090';
+    }
+
+    if (!isBlocking) { fillColor = fillColor.replace('0.2', '0.07').replace('0.25','0.07').replace('0.18','0.07'); borderColor += '66'; }
+    if (isHovered) { fillColor = 'rgba(0,229,160,0.12)'; borderColor = '#00e5a0'; }
+
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isBlocking ? 1.5 : 0.8;
+
+    // rounded rect
+    const r = Math.min(3, w/4, h/4);
+    ctx.beginPath();
+    ctx.roundRect(tl.x, tl.y, w, h, r);
+    ctx.fill();
+    ctx.stroke();
+
+    // Label
+    if (showLabels && w > 20 && h > 12) {
+      ctx.fillStyle = isBlocking ? (isHovered ? '#00e5a0' : borderColor) : borderColor + '88';
+      ctx.font = `${Math.max(8, Math.min(11, w/8))}px "Share Tech Mono", monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const displayLabel = label.length > 12 ? label.substring(0,12) : label;
+      if (Math.abs(h) > 10) {
+        ctx.fillText(displayLabel, tl.x + w/2, tl.y + h/2);
+      }
+    }
+  });
+
+  // Draw path
+  if (path.length > 1) {
+    for (let i = 0; i < path.length - 1; i++) {
+      const p1 = worldToCanvas(path[i].x, path[i].y);
+      const p2 = worldToCanvas(path[i+1].x, path[i+1].y);
+      const isCollision = collisionSegments.includes(i);
+
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.strokeStyle = isCollision ? '#ff4060' : '#00e5a0';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash(isCollision ? [6,4] : []);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Arrow
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const al = 8;
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx - al * Math.cos(angle - 0.4), my - al * Math.sin(angle - 0.4));
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx - al * Math.cos(angle + 0.4), my - al * Math.sin(angle + 0.4));
+      ctx.strokeStyle = isCollision ? '#ff4060' : '#00c488';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  // Draw waypoints
+  path.forEach((pt, i) => {
+    const p = worldToCanvas(pt.x, pt.y);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, i === 0 ? 7 : i === path.length-1 ? 7 : 5, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#00e5a0' : i === path.length-1 ? '#ff4060' : '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0c10';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = i === 0 ? '#00e5a0' : i === path.length-1 ? '#ff4060' : '#8899aa';
+    ctx.font = '10px "Share Tech Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    const label = i === 0 ? 'START' : i === path.length-1 ? 'END' : `W${i}`;
+    ctx.fillText(label, p.x, p.y - 8);
+  });
+
+  // Draw collision markers on top
+  if (validationResult) {
+    validationResult.collisions.forEach(c => {
+      const pt = worldToCanvas(c.x, c.y);
+      // Flash ring
+      const pulse = 0.6 + 0.4 * Math.sin(animFrame * 0.1);
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 14 * pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,64,96,${0.7 * pulse})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#ff4060';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✗', pt.x, pt.y);
+    });
+  }
+
+  // Scale bar
+  const sbStart = worldToCanvas(0, 0);
+  const sbEnd = worldToCanvas(1, 0);
+  const sbLen = sbEnd.x - sbStart.x;
+  ctx.strokeStyle = '#3a4a5a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(20, H - 20); ctx.lineTo(20 + sbLen, H - 20);
+  ctx.moveTo(20, H - 24); ctx.lineTo(20, H - 16);
+  ctx.moveTo(20 + sbLen, H - 24); ctx.lineTo(20 + sbLen, H - 16);
+  ctx.stroke();
+  ctx.fillStyle = '#3a4a5a';
+  ctx.font = '9px "Share Tech Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('1 m', 20 + sbLen/2, H - 8);
+}
+
+// ============================================================
+// OBJECT BLOCKING LOGIC
+// ============================================================
+function isObjectBlocking(obj, actorHeight) {
+  // An object blocks if it overlaps the actor's body height range
+  // Actor occupies from ~0.1m off floor to actorHeight
+  const objBottom = obj.cz - obj.sz / 2;
+  const objTop = obj.cz + obj.sz / 2;
+  const actorBottom = 0.1;
+  const actorTop = actorHeight;
+  // overlap in Z
+  return !(objTop < actorBottom || objBottom > actorTop);
+}
+
+function getBlockingObjects() {
+  const actorHeight = parseFloat(document.getElementById('actor-height').value) || 1.75;
+  return SCENE_OBJECTS.filter(o => isObjectBlocking(o, actorHeight));
+}
+
+// ============================================================
+// COLLISION DETECTION
+// ============================================================
+function segmentIntersectsRect(p1, p2, obj) {
+  // Check if segment p1->p2 passes through obj's 2D footprint (XY plane)
+  const minX = obj.cx - obj.sx/2;
+  const maxX = obj.cx + obj.sx/2;
+  const minY = obj.cy - obj.sy/2;
+  const maxY = obj.cy + obj.sy/2;
+
+  // Expand slightly for actor radius
+  const r = 0.18;
+  const exMinX = minX - r, exMaxX = maxX + r;
+  const exMinY = minY - r, exMaxY = maxY + r;
+
+  // Parametric line segment vs AABB
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  let tMin = 0, tMax = 1;
+
+  if (Math.abs(dx) < 1e-9) {
+    if (p1.x < exMinX || p1.x > exMaxX) return null;
+  } else {
+    const t1 = (exMinX - p1.x) / dx;
+    const t2 = (exMaxX - p1.x) / dx;
+    tMin = Math.max(tMin, Math.min(t1, t2));
+    tMax = Math.min(tMax, Math.max(t1, t2));
+  }
+
+  if (Math.abs(dy) < 1e-9) {
+    if (p1.y < exMinY || p1.y > exMaxY) return null;
+  } else {
+    const t1 = (exMinY - p1.y) / dy;
+    const t2 = (exMaxY - p1.y) / dy;
+    tMin = Math.max(tMin, Math.min(t1, t2));
+    tMax = Math.min(tMax, Math.max(t1, t2));
+  }
+
+  if (tMax < tMin) return null;
+  const t = (tMin + tMax) / 2;
+  return { x: p1.x + t * dx, y: p1.y + t * dy, t };
+}
+
+function pointInRect(px, py, obj) {
+  const r = 0.2;
+  return px > obj.cx - obj.sx/2 - r && px < obj.cx + obj.sx/2 + r &&
+         py > obj.cy - obj.sy/2 - r && py < obj.cy + obj.sy/2 + r;
+}
+
+// ============================================================
+// VALIDATE PATH
+// ============================================================
+function validatePath() {
+  if (path.length < 2) {
+    alert('Please click at least 2 points on the map to define a path before validating.');
+    return;
+  }
+
+  const blocking = getBlockingObjects();
+  const actorName = document.getElementById('actor-name').value || 'Suspect';
+  const collisions = [];
+  const interactions = [];
+  const stepResults = [];
+  let totalDist = 0;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const p1 = path[i], p2 = path[i+1];
+    const segDist = Math.sqrt((p2.x-p1.x)**2 + (p2.y-p1.y)**2);
+    totalDist += segDist;
+
+    const segCollisions = [];
+    let hitObj = null;
+
+    for (const obj of blocking) {
+      // Skip tiny objects (thickness < 3cm in any horizontal dim)
+      if (obj.sx < 0.04 || obj.sy < 0.04) continue;
+
+      const hit = segmentIntersectsRect(p1, p2, obj);
+      if (hit) {
+        segCollisions.push({ obj, ...hit });
+        if (!hitObj) hitObj = obj;
+        collisions.push({
+          segIdx: i,
+          x: hit.x, y: hit.y,
+          objId: obj.id,
+          objLabel: OBJ_LABELS[obj.id] || 'object'
+        });
+      }
+
+      // Proximity interaction
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      const dist = Math.sqrt((midX - obj.cx)**2 + (midY - obj.cy)**2);
+      if (dist < 1.2) {
+        interactions.push({ step: i+1, obj, dist: dist.toFixed(2), type: dist < 0.5 ? 'close contact' : 'proximity' });
+      }
+    }
+
+    if (segCollisions.length === 0) {
+      stepResults.push({ type: 'valid', label: `Step ${i+1}`, desc: `Clear path (${segDist.toFixed(2)}m)` });
+    } else {
+      const names = [...new Set(segCollisions.map(c => OBJ_LABELS[c.obj.id] || `obj#${c.obj.id}`))].join(', ');
+      stepResults.push({ type: 'invalid', label: `Step ${i+1}`, desc: `Blocked by: ${names}` });
+    }
+  }
+
+  const isValid = collisions.length === 0;
+  const score = Math.max(0, Math.round(100 - (collisions.length * 20) - (collisions.length > 0 ? 10 : 0)));
+
+  validationResult = { collisions, interactions, stepResults, isValid, score, totalDist, actorName };
+  renderResults(validationResult);
+  renderInteractions(interactions);
+  renderTimeline(stepResults);
+  renderScene();
+
+  // Update status
+  document.getElementById('path-status').textContent = `PATH: ${path.length} WAYPOINTS`;
+}
+
+// ============================================================
+// RENDER RESULTS
+// ============================================================
+function renderResults(r) {
+  const body = document.getElementById('results-body');
+  const tagEl = document.getElementById('result-tag');
+
+  if (r.isValid) {
+    tagEl.innerHTML = '<span class="tag tag-valid">VALID</span>';
+  } else {
+    tagEl.innerHTML = '<span class="tag tag-invalid">INVALID</span>';
+  }
+
+  const scoreColor = r.score >= 80 ? 'var(--valid)' : r.score >= 50 ? 'var(--warn)' : 'var(--invalid)';
+
+  let html = `
+    <div class="score-ring">
+      <div class="score-value" style="color:${scoreColor}">${r.score}</div>
+      <div class="score-label">PLAUSIBILITY SCORE</div>
+      <div style="margin-top:8px;width:120px;">
+        <div class="mini-meter">
+          <div class="mini-meter-fill" style="width:${r.score}%;background:${scoreColor}"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  html += `
+    <div class="verdict-card ${r.isValid ? 'valid' : 'invalid'}">
+      <div class="verdict-label">${r.isValid ? '✓ STATEMENT PLAUSIBLE' : '✗ STATEMENT IMPLAUSIBLE'}</div>
+      <div class="verdict-text">${
+        r.isValid
+          ? `The described path for <strong>${r.actorName}</strong> is physically possible given the room layout. All ${r.stepResults.length} movement segments are clear of obstacles.`
+          : `The described path for <strong>${r.actorName}</strong> contains <strong>${r.collisions.length} collision(s)</strong> with room objects. This movement is not physically possible without passing through solid objects.`
+      }</div>
+    </div>
+  `;
+
+  html += `<div class="section-label">Summary</div>`;
+  html += `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="font-size:18px;font-family:'Share Tech Mono',monospace;color:var(--text)">${r.totalDist.toFixed(2)}m</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:2px;letter-spacing:1px;">TOTAL DISTANCE</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="font-size:18px;font-family:'Share Tech Mono',monospace;color:${r.collisions.length > 0 ? 'var(--invalid)' : 'var(--valid)'}">${r.collisions.length}</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:2px;letter-spacing:1px;">COLLISIONS</div>
+      </div>
+    </div>
+  `;
+
+  if (r.collisions.length > 0) {
+    html += `<div class="section-label">Collision Details</div>`;
+    const unique = {};
+    r.collisions.forEach(c => { unique[c.objId] = c; });
+    Object.values(unique).forEach(c => {
+      html += `
+        <div class="verdict-card invalid" style="margin-bottom:8px;">
+          <div class="verdict-label">⚠ ${(OBJ_LABELS[c.objId] || 'object').toUpperCase()}</div>
+          <div class="verdict-text">Path intersects with object #${c.objId} (${OBJ_LABELS[c.objId] || 'object'}) at approx. (${c.x.toFixed(2)}, ${c.y.toFixed(2)}). A person cannot pass through this obstacle.</div>
+        </div>`;
+    });
+  }
+
+  html += `<div class="section-label">Step Analysis</div>`;
+  html += '<ul class="step-list">';
+  r.stepResults.forEach(s => {
+    const icon = s.type === 'valid' ? '✓' : '✗';
+    html += `
+      <li class="step-item step-${s.type}">
+        <span class="step-icon" style="color:${s.type==='valid'?'var(--valid)':'var(--invalid)'}">${icon}</span>
+        <div><strong>${s.label}:</strong> ${s.desc}</div>
+      </li>`;
+  });
+  html += '</ul>';
+
+  body.innerHTML = html;
+  body.classList.add('flicker');
+  setTimeout(() => body.classList.remove('flicker'), 400);
+}
+
+function renderInteractions(interactions) {
+  const log = document.getElementById('interactions-log');
+  if (interactions.length === 0) {
+    log.innerHTML = '<div style="color:var(--text-dim);font-size:11px;">No significant object interactions detected along path.</div>';
+    return;
+  }
+  const unique = {};
+  interactions.forEach(i => { const k = `${i.step}-${i.obj.id}`; if (!unique[k]) unique[k] = i; });
+  let html = '';
+  Object.values(unique).slice(0, 12).forEach(i => {
+    const label = OBJ_LABELS[i.obj.id] || 'object';
+    html += `
+      <div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);">
+        <span style="color:${i.type==='close contact'?'var(--warn)':'var(--text-dim)'};font-size:13px;">${i.type==='close contact'?'⚡':'👁'}</span>
+        <div>
+          <div style="font-size:11px;color:var(--text);">Step ${i.step}: <strong>${label}</strong></div>
+          <div style="font-size:10px;color:var(--text-dim);">${i.type} · ${i.dist}m away</div>
+        </div>
+      </div>`;
+  });
+  log.innerHTML = html;
+}
+
+function renderTimeline(steps) {
+  const track = document.getElementById('timeline-track');
+  document.getElementById('waypoint-label').textContent = `${path.length} points, ${steps.length} segments`;
+  let html = '';
+  path.forEach((pt, i) => {
+    const isCollision = validationResult && validationResult.collisions.some(c => c.segIdx === i || c.segIdx === i-1);
+    html += `
+      <div class="timeline-event ${isCollision ? 'collision' : ''}" onclick="highlightWaypoint(${i})">
+        <div class="timeline-event-label">${i === 0 ? 'START' : i === path.length-1 ? 'END' : `W${i}`}</div>
+        <div class="timeline-event-sub">(${pt.x.toFixed(2)}, ${pt.y.toFixed(2)})</div>
+      </div>`;
+  });
+  track.innerHTML = html;
+}
+
+function highlightWaypoint(i) {
+  // Center view on waypoint
+  viewOffset = { x: -path[i].x, y: -path[i].y };
+  renderScene();
+}
+
+// ============================================================
+// MOUSE EVENTS
+// ============================================================
+canvas.addEventListener('click', e => {
+  if (isDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const world = canvasToWorld(cx, cy);
+  path.push(world);
+  updateWaypointLabel();
+  renderScene();
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (path.length > 0) {
+    path.pop();
+    updateWaypointLabel();
+    validationResult = null;
+    renderScene();
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const world = canvasToWorld(cx, cy);
+
+  document.getElementById('coords-display').textContent =
+    `x: ${world.x.toFixed(2)}m  y: ${world.y.toFixed(2)}m`;
+
+  // Hover detection
+  hoveredObj = null;
+  for (const obj of SCENE_OBJECTS) {
+    if (world.x > obj.cx - obj.sx/2 && world.x < obj.cx + obj.sx/2 &&
+        world.y > obj.cy - obj.sy/2 && world.y < obj.cy + obj.sy/2) {
+      hoveredObj = obj;
+      const label = OBJ_LABELS[obj.id] || 'object';
+      const blocking = isObjectBlocking(obj, parseFloat(document.getElementById('actor-height').value) || 1.75);
+      document.getElementById('map-hint').textContent =
+        `${label.toUpperCase()} (obj #${obj.id}) · H: ${obj.sz.toFixed(2)}m · ${blocking ? 'BLOCKING' : 'passable'}`;
+      break;
+    }
+  }
+  if (!hoveredObj) document.getElementById('map-hint').textContent = 'CLICK TO ADD WAYPOINTS · RIGHT-CLICK TO REMOVE LAST';
+
+  if (isDragging) {
+    viewOffset.x = dragOffset.x + (e.clientX - dragStart.x) / viewScale;
+    viewOffset.y = dragOffset.y + (e.clientY - dragStart.y) / viewScale;
+    renderScene();
+  } else {
+    renderScene();
+  }
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1 || e.button === 2 && e.shiftKey) {
+    isDragging = true;
+    dragStart = { x: e.clientX, y: e.clientY };
+    dragOffset = { ...viewOffset };
+  }
+});
+
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.15 : 0.87;
+  viewScale *= factor;
+  viewScale = Math.max(20, Math.min(200, viewScale));
+  renderScene();
+}, { passive: false });
+
+function updateWaypointLabel() {
+  const label = document.getElementById('waypoint-label');
+  label.textContent = `${path.length} point${path.length !== 1 ? 's' : ''}`;
+  const wpCount = document.getElementById('wp-count');
+  wpCount.textContent = path.length > 0 ? `${path.length} waypoint${path.length > 1 ? 's' : ''} · Click to add · Right-click to remove` : '';
+  document.getElementById('path-status').textContent = `PATH: ${path.length} WAYPOINTS`;
+  updateTimeline();
+}
+
+function updateTimeline() {
+  const track = document.getElementById('timeline-track');
+  if (path.length === 0) {
+    track.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:8px 0;">Click on the map to add waypoints to trace the actor\'s path.</div>';
+    return;
+  }
+  let html = '';
+  path.forEach((pt, i) => {
+    html += `
+      <div class="timeline-event" onclick="highlightWaypoint(${i})">
+        <div class="timeline-event-label">${i === 0 ? 'START' : i === path.length-1 ? 'END' : `W${i}`}</div>
+        <div class="timeline-event-sub">(${pt.x.toFixed(2)}, ${pt.y.toFixed(2)})</div>
+      </div>`;
+  });
+  track.innerHTML = html;
+  document.getElementById('waypoint-label').textContent = `${path.length} points`;
+}
+
+// ============================================================
+// CONTROLS
+// ============================================================
+function zoomIn() { viewScale = Math.min(200, viewScale * 1.2); renderScene(); }
+function zoomOut() { viewScale = Math.max(20, viewScale / 1.2); renderScene(); }
+function resetView() { viewOffset = { x: 0, y: 0 }; viewScale = 60; renderScene(); }
+function clearPath() { path = []; validationResult = null; updateWaypointLabel(); document.getElementById('results-body').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Draw a path on the map and click Validate to see the analysis.</div></div>'; document.getElementById('result-tag').innerHTML = ''; renderScene(); }
+function clearAll() { clearPath(); document.getElementById('statement').value = ''; }
+
+// ============================================================
+// SCENARIO PRESETS
+// ============================================================
+function loadScenario(name) {
+  clearPath();
+  const scenarios = {
+    living: {
+      text: "The suspect entered from the south side of the room, walked past the large sofa in the center-left area, approached the TV unit, paused briefly, then moved toward the window on the north wall.",
+      waypoints: [[-0.1, -2.5], [-0.5, -0.8], [-0.7, -1.2], [1.1, 1.7], [1.2, 2.8]]
+    },
+    kitchen: {
+      text: "The person was seen entering through the east entrance, crossing the open floor area, stopping at the kitchen sink area near the north wall, then moving to stand near the refrigerator unit.",
+      waypoints: [[2.8, -2.5], [1.5, -1.7], [0.0, -2.2], [-0.7, -2.3], [-1.1, -2.5]]
+    },
+    suspicious: {
+      text: "The witness claims the suspect walked through the wall panel area, passed directly through the large wardrobe cabinet in the left section, and exited through the north wall. This path appears to violate physical constraints.",
+      waypoints: [[-0.5, -0.5], [-1.8, -0.5], [-2.7, -0.6], [-3.1, -1.0], [-3.3, -1.5]]
+    },
+    direct: {
+      text: "The individual walked in a straight line from the south entrance directly to the far north wall, crossing through the central area of the room.",
+      waypoints: [[0.0, -3.0], [0.0, -1.5], [0.0, 0.0], [0.0, 1.5], [0.0, 3.0]]
+    }
+  };
+  const s = scenarios[name];
+  if (!s) return;
+  document.getElementById('statement').value = s.text;
+  s.waypoints.forEach(([x, y]) => path.push({ x, y }));
+  updateWaypointLabel();
+  renderScene();
+}
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+function animate() {
+  animFrame++;
+  if (validationResult && validationResult.collisions.length > 0) {
+    renderScene(); // continuous redraw for pulse effect
+  }
+  requestAnimationFrame(animate);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.getElementById('obj-count-pill').textContent = `${SCENE_OBJECTS.length} OBJECTS`;
+
+setTimeout(() => {
+  document.getElementById('loader').classList.add('hidden');
+  resizeCanvas();
+  animate();
+}, 1400);
+</script>
+</body>
+</html>
